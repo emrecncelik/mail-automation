@@ -35,9 +35,7 @@ def get_credentials():
 
     # Initialize the flow
     flow = InstalledAppFlow.from_client_config(
-        dict({"installed": st.secrets["gcloud"]["installed"]}),
-        SCOPES,
-        redirect_uri="urn:ietf:wg:oauth:2.0:oob",  # Use manual copy-paste flow
+        dict({"installed": st.secrets["gcloud"]["installed"]}), SCOPES
     )
 
     # Generate the authorization URL
@@ -50,8 +48,8 @@ def get_credentials():
         "**Step 2:** Sign in and grant permission, then copy the code you receive"
     )
 
-    # Input field for the authorization code
-    auth_code = st.text_input("Enter the authorization code:")
+    # Input field for the authorization code - add unique key to fix the error
+    auth_code = st.text_input("Enter the authorization code:", key="auth_code_input")
 
     if auth_code:
         try:
@@ -72,14 +70,14 @@ def get_credentials():
 
 
 def create_draft(from_email, to_email, subject, message_body, attachments):
-    creds = get_credentials()
-
-    # If authentication failed, don't proceed
-    if creds is None:
+    # Use the globally stored credentials instead of calling get_credentials() each time
+    if "credentials" not in st.session_state or st.session_state["credentials"] is None:
         return (
             False,
             "Authentication required. Please complete the authentication steps first.",
         )
+
+    creds = st.session_state["credentials"]
 
     try:
         service = build("gmail", "v1", credentials=creds)
@@ -124,6 +122,16 @@ def create_draft(from_email, to_email, subject, message_body, attachments):
 # Streamlit UI
 st.title("Automated Email Draft Creator")
 
+# Authentication first
+if "credentials" not in st.session_state:
+    st.session_state["credentials"] = get_credentials()
+    # If still not authenticated, don't proceed with the rest of the app
+    if st.session_state["credentials"] is None:
+        st.stop()
+    else:
+        st.success("Authentication successful! You can now use the app.")
+        st.rerun()  # Rerun to refresh the UI after authentication
+
 # From email
 from_email = st.text_input("From Email", placeholder="your@email.com")
 
@@ -143,7 +151,9 @@ John Doe,john.doe@example.com
 Jane Smith,jane.smith@example.com"""
 st.code(csv_example)
 
-uploaded_csv = st.file_uploader("Upload Recipient CSV", type=["csv"])
+uploaded_csv = st.file_uploader(
+    "Upload Recipient CSV", type=["csv"], key="csv_uploader"
+)
 
 # File suffix configuration
 st.subheader("Step 2: Configure File Patterns")
@@ -152,9 +162,13 @@ st.write("Define the suffixes for matching files (without file extension)")
 # Use columns for a cleaner layout
 col1, col2 = st.columns(2)
 with col1:
-    suffix1 = st.text_input("Suffix 1", value="_fatura", placeholder="_fatura")
+    suffix1 = st.text_input(
+        "Suffix 1", value="_fatura", placeholder="_fatura", key="suffix1"
+    )
 with col2:
-    suffix2 = st.text_input("Suffix 2", value="_sertifika", placeholder="_sertifika")
+    suffix2 = st.text_input(
+        "Suffix 2", value="_sertifika", placeholder="_sertifika", key="suffix2"
+    )
 
 # Option to add more suffixes
 if "suffixes" not in st.session_state:
@@ -172,7 +186,7 @@ for i, suffix_val in enumerate(st.session_state.suffixes):
         f"Suffix {i+3}", value=suffix_val, key=suffix_key
     )
 
-if st.button("Add Another Suffix"):
+if st.button("Add Another Suffix", key="add_suffix_btn"):
     add_suffix()
 
 # Gather all suffixes
@@ -185,7 +199,7 @@ st.write(
     f"Upload all PDF files following naming pattern: name_with_underscores{suffixes[0] if suffixes else '_fatura'}.pdf, etc."
 )
 uploaded_files = st.file_uploader(
-    "Upload PDFs", type=["pdf"], accept_multiple_files=True
+    "Upload PDFs", type=["pdf"], accept_multiple_files=True, key="pdf_uploader"
 )
 
 # Preview and processing logic
@@ -269,7 +283,7 @@ if uploaded_csv is not None and uploaded_files:
                 )
 
         # Submit button
-        if st.button("Create Drafts"):
+        if st.button("Create Drafts", key="create_drafts_btn"):
             if not from_email:
                 st.error("From Email is required")
             elif not subject:
