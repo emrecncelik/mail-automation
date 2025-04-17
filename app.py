@@ -36,8 +36,12 @@ def get_credentials():
     # Initialize the flow with desktop credentials
     flow = InstalledAppFlow.from_client_config(st.secrets["gcloud"], SCOPES)
 
-    # Use authorization code flow with manual copy/paste
-    auth_url, _ = flow.authorization_url(prompt="consent")
+    # Use authorization code flow with OOB redirect
+    auth_url, _ = flow.authorization_url(
+        prompt="consent",
+        access_type="offline",
+        redirect_uri="urn:ietf:wg:oauth:2.0:oob",
+    )
 
     st.markdown(f"**Step 1:** [Click here to authorize with Google]({auth_url})")
     st.markdown("**Step 2:** Sign in and authorize the application")
@@ -47,7 +51,7 @@ def get_credentials():
 
     if auth_code:
         try:
-            flow.fetch_token(code=auth_code)
+            flow.fetch_token(code=auth_code, redirect_uri="urn:ietf:wg:oauth:2.0:oob")
             creds = flow.credentials
 
             # Save credentials to session state
