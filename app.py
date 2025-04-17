@@ -28,7 +28,7 @@ def get_credentials():
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_config(
-                dict(st.secrets["gcloud"]["web"]), SCOPES
+                dict({"web": st.secrets["gcloud"]["web"]}), SCOPES
             )
             creds = flow.run_local_server(port=8080)
 
