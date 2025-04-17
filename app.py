@@ -33,15 +33,13 @@ def get_credentials():
     # If no valid credentials, start OAuth flow for desktop app
     st.write("### Gmail Authentication Required")
 
-    # Initialize the flow with desktop credentials
-    flow = InstalledAppFlow.from_client_config(st.secrets["gcloud"], SCOPES)
+    # Initialize the flow with desktop credentials and explicitly set the redirect URI
+    flow = InstalledAppFlow.from_client_config(
+        st.secrets["gcloud"], SCOPES, redirect_uri="urn:ietf:wg:oauth:2.0:oob"
+    )
 
     # Use authorization code flow with OOB redirect
-    auth_url, _ = flow.authorization_url(
-        prompt="consent",
-        access_type="offline",
-        redirect_uri="urn:ietf:wg:oauth:2.0:oob",
-    )
+    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
 
     st.markdown(f"**Step 1:** [Click here to authorize with Google]({auth_url})")
     st.markdown("**Step 2:** Sign in and authorize the application")
@@ -51,7 +49,7 @@ def get_credentials():
 
     if auth_code:
         try:
-            flow.fetch_token(code=auth_code, redirect_uri="urn:ietf:wg:oauth:2.0:oob")
+            flow.fetch_token(code=auth_code)
             creds = flow.credentials
 
             # Save credentials to session state
