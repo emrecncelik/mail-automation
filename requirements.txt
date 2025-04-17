@@ -1,3 +1,4 @@
+setuptools
 cachetools==4.2.4
 certifi==2025.1.31
 charset-normalizer==3.4.1
