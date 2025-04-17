@@ -17,18 +17,40 @@ from googleapiclient.errors import HttpError
 # Define the scopes
 SCOPES = ["https://www.googleapis.com/auth/gmail.compose"]
 
+# Debug sidebar for authentication status
+st.sidebar.title("Debug Info")
+if "oauth_token" in st.session_state:
+    st.sidebar.success("Token is in session state")
+else:
+    st.sidebar.warning("No token in session state")
+
+if "credentials" in st.session_state:
+    st.sidebar.success("Credentials are in session state")
+else:
+    st.sidebar.warning("No credentials in session state")
+
 
 def get_credentials():
     # Check if we already have tokens in session state
     if "oauth_token" in st.session_state:
-        creds = Credentials.from_authorized_user_info(st.session_state["oauth_token"])
+        st.sidebar.info("Using existing token from session state")
+        try:
+            creds = Credentials.from_authorized_user_info(
+                st.session_state["oauth_token"]
+            )
 
-        if creds.valid:
-            return creds
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            st.session_state["oauth_token"] = json.loads(creds.to_json())
-            return creds
+            if creds.valid:
+                st.sidebar.success("Token is valid")
+                return creds
+            if creds.expired and creds.refresh_token:
+                st.sidebar.info("Token expired, attempting refresh")
+                creds.refresh(Request())
+                st.session_state["oauth_token"] = json.loads(creds.to_json())
+                return creds
+        except Exception as e:
+            st.sidebar.error(f"Error with existing token: {str(e)}")
+            # Clear invalid token
+            del st.session_state["oauth_token"]
 
     # If no valid credentials, start OAuth flow for desktop app
     st.write("### Gmail Authentication Required")
@@ -49,28 +71,50 @@ def get_credentials():
 
     if auth_code:
         try:
+            st.sidebar.info(f"Attempting to fetch token with code: {auth_code[:5]}...")
             flow.fetch_token(code=auth_code)
             creds = flow.credentials
 
+            # Debug token info
+            token_info = json.loads(creds.to_json())
+            has_refresh = "refresh_token" in token_info
+            st.sidebar.info(
+                f"Token fetched successfully. Has refresh token: {has_refresh}"
+            )
+
             # Save credentials to session state
-            st.session_state["oauth_token"] = json.loads(creds.to_json())
+            st.session_state["oauth_token"] = token_info
             st.success("Successfully authenticated!")
             return creds
         except Exception as e:
             st.error(f"Authentication failed: {str(e)}")
+            st.sidebar.error(f"Token fetch error: {str(e)}")
 
     return None
 
 
 def create_draft(from_email, to_email, subject, message_body, attachments):
-    # Use the globally stored credentials instead of calling get_credentials() each time
-    if "credentials" not in st.session_state or st.session_state["credentials"] is None:
+    # Check authentication status with more debugging
+    if "credentials" not in st.session_state:
+        st.sidebar.error("No credentials in session state for create_draft")
+        return (
+            False,
+            "Authentication required. Please complete the authentication steps first.",
+        )
+
+    if st.session_state["credentials"] is None:
+        st.sidebar.error("Credentials are None in create_draft")
         return (
             False,
             "Authentication required. Please complete the authentication steps first.",
         )
 
     creds = st.session_state["credentials"]
+
+    # Debug credential state
+    st.sidebar.info(
+        f"Using credentials for {to_email}. Valid: {creds.valid}, Expired: {creds.expired}"
+    )
 
     try:
         service = build("gmail", "v1", credentials=creds)
@@ -109,21 +153,38 @@ def create_draft(from_email, to_email, subject, message_body, attachments):
         return True, f'Draft created for {to_email} with ID: {draft["id"]}'
 
     except HttpError as error:
+        st.sidebar.error(f"API Error: {str(error)}")
         return False, f"Error for {to_email}: {error}"
+    except Exception as e:
+        st.sidebar.error(f"General Error: {str(e)}")
+        return False, f"Unexpected error for {to_email}: {str(e)}"
 
 
 # Streamlit UI
 st.title("Automated Email Draft Creator")
 
-# Authentication first
-if "credentials" not in st.session_state:
-    st.session_state["credentials"] = get_credentials()
-    # If still not authenticated, don't proceed with the rest of the app
-    if st.session_state["credentials"] is None:
-        st.stop()
+# Clear button to reset the session state
+if st.sidebar.button("Clear Authentication"):
+    if "oauth_token" in st.session_state:
+        del st.session_state["oauth_token"]
+    if "credentials" in st.session_state:
+        del st.session_state["credentials"]
+    st.sidebar.success("Authentication cleared")
+    st.rerun()
+
+# Authentication handling with better error messaging
+if "credentials" not in st.session_state or st.session_state["credentials"] is None:
+    st.write("Getting new credentials...")
+    credentials = get_credentials()
+    if credentials:
+        st.session_state["credentials"] = credentials
+        st.success("Authentication successful!")
+        st.rerun()  # Rerun to refresh the UI
     else:
-        st.success("Authentication successful! You can now use the app.")
-        st.rerun()  # Rerun to refresh the UI after authentication
+        st.warning("Authentication is required. Please complete the steps above.")
+        st.stop()
+else:
+    st.success("Already authenticated!")
 
 # From email
 from_email = st.text_input("From Email", placeholder="your@email.com")
@@ -284,6 +345,9 @@ if uploaded_csv is not None and uploaded_files:
             elif not message_body:
                 st.error("Message body is required")
             else:
+                st.sidebar.info("Creating drafts with authentication status:")
+                st.sidebar.info(f"Has credentials: {'credentials' in st.session_state}")
+
                 results = []
                 progress_bar = st.progress(0)
 
