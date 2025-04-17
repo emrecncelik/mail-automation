@@ -30,30 +30,23 @@ def get_credentials():
             st.session_state["oauth_token"] = json.loads(creds.to_json())
             return creds
 
-    # If no valid credentials, start OAuth flow
+    # If no valid credentials, start OAuth flow for desktop app
     st.write("### Gmail Authentication Required")
 
-    # Initialize the flow
-    flow = InstalledAppFlow.from_client_config(
-        dict({"installed": st.secrets["gcloud"]["installed"]}), SCOPES
-    )
+    # Initialize the flow with desktop credentials
+    flow = InstalledAppFlow.from_client_config(st.secrets["gcloud"], SCOPES)
 
-    # Generate the authorization URL
+    # Use authorization code flow with manual copy/paste
     auth_url, _ = flow.authorization_url(prompt="consent")
 
-    # Show instructions to the user
-    st.markdown(f"**Step 1:** Click the link below to authorize this app:")
-    st.markdown(f"[Click here to authorize]({auth_url})")
-    st.markdown(
-        "**Step 2:** Sign in and grant permission, then copy the code you receive"
-    )
+    st.markdown(f"**Step 1:** [Click here to authorize with Google]({auth_url})")
+    st.markdown("**Step 2:** Sign in and authorize the application")
+    st.markdown("**Step 3:** Copy the code you receive")
 
-    # Input field for the authorization code - add unique key to fix the error
     auth_code = st.text_input("Enter the authorization code:", key="auth_code_input")
 
     if auth_code:
         try:
-            # Exchange the authorization code for credentials
             flow.fetch_token(code=auth_code)
             creds = flow.credentials
 
@@ -63,9 +56,7 @@ def get_credentials():
             return creds
         except Exception as e:
             st.error(f"Authentication failed: {str(e)}")
-            return None
 
-    # No valid credentials yet
     return None
 
 
