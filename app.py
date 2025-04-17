@@ -35,7 +35,7 @@ def get_credentials():
 
     # Initialize the flow
     flow = InstalledAppFlow.from_client_config(
-        dict({"web": st.secrets["gcloud"]["web"]}),
+        dict({"installed": st.secrets["gcloud"]["installed"]}),
         SCOPES,
         redirect_uri="urn:ietf:wg:oauth:2.0:oob",  # Use manual copy-paste flow
     )
