@@ -19,27 +19,67 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.compose"]
 
 
 def get_credentials():
-    creds = None
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_info(json.load(open("token.json")))
+    # Check if we already have tokens in session state
+    if "oauth_token" in st.session_state:
+        creds = Credentials.from_authorized_user_info(st.session_state["oauth_token"])
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+        if creds.valid:
+            return creds
+        if creds.expired and creds.refresh_token:
             creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_config(
-                dict({"web": st.secrets["gcloud"]["web"]}), SCOPES
-            )
-            creds = flow.run_local_server(port=8080)
+            st.session_state["oauth_token"] = json.loads(creds.to_json())
+            return creds
 
-        with open("token.json", "w") as token:
-            token.write(creds.to_json())
+    # If no valid credentials, start OAuth flow
+    st.write("### Gmail Authentication Required")
 
-    return creds
+    # Initialize the flow
+    flow = InstalledAppFlow.from_client_config(
+        dict({"web": st.secrets["gcloud"]["web"]}),
+        SCOPES,
+        redirect_uri="urn:ietf:wg:oauth:2.0:oob",  # Use manual copy-paste flow
+    )
+
+    # Generate the authorization URL
+    auth_url, _ = flow.authorization_url(prompt="consent")
+
+    # Show instructions to the user
+    st.markdown(f"**Step 1:** Click the link below to authorize this app:")
+    st.markdown(f"[Click here to authorize]({auth_url})")
+    st.markdown(
+        "**Step 2:** Sign in and grant permission, then copy the code you receive"
+    )
+
+    # Input field for the authorization code
+    auth_code = st.text_input("Enter the authorization code:")
+
+    if auth_code:
+        try:
+            # Exchange the authorization code for credentials
+            flow.fetch_token(code=auth_code)
+            creds = flow.credentials
+
+            # Save credentials to session state
+            st.session_state["oauth_token"] = json.loads(creds.to_json())
+            st.success("Successfully authenticated!")
+            return creds
+        except Exception as e:
+            st.error(f"Authentication failed: {str(e)}")
+            return None
+
+    # No valid credentials yet
+    return None
 
 
 def create_draft(from_email, to_email, subject, message_body, attachments):
     creds = get_credentials()
+
+    # If authentication failed, don't proceed
+    if creds is None:
+        return (
+            False,
+            "Authentication required. Please complete the authentication steps first.",
+        )
 
     try:
         service = build("gmail", "v1", credentials=creds)
