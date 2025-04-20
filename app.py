@@ -221,7 +221,10 @@ with col1:
     )
 with col2:
     suffix2 = st.text_input(
-        "Suffix 2", value="_sertifika", placeholder="_sertifika", key="suffix2"
+        "Suffix 2",
+        value="_katilimbelgesi",
+        placeholder="_katilimbelgesi",
+        key="suffix2",
     )
 
 # Option to add more suffixes
